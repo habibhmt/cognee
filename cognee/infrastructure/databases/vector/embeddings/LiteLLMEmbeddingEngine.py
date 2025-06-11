@@ -98,6 +98,7 @@ class LiteLLMEmbeddingEngine(EmbeddingEngine):
                     api_key=self.api_key,
                     api_base=self.endpoint,
                     api_version=self.api_version,
+                    custom_llm_provider=self.provider,
                 )
 
                 return [data["embedding"] for data in response.data]
@@ -167,17 +168,25 @@ class LiteLLMEmbeddingEngine(EmbeddingEngine):
             The tokenizer instance compatible with the model.
         """
         logger.debug(f"Loading tokenizer for model {self.model}...")
-        # If model also contains provider information, extract only model information
-        model = self.model.split("/")[-1]
+        # Extract base model name without provider prefix if present
+        base_model = self.model
+        # If the model string contains a known provider prefix (e.g. "huggingface/", "openai/", "openrouter/", etc.)
+        # strip just the first path component so that the underlying tokenizer receives the correct
+        # <namespace>/<repo_name> or <model_name> value it expects.
+        if "/" in base_model:
+            # Only drop the first component if it is a known provider hint
+            first, rest = base_model.split("/", 1)
+            if first.lower() in {"huggingface", "openai", "openrouter", "custom"}:
+                base_model = rest
 
         if "openai" in self.provider.lower():
-            tokenizer = TikTokenTokenizer(model=model, max_tokens=self.max_tokens)
+            tokenizer = TikTokenTokenizer(model=base_model, max_tokens=self.max_tokens)
         elif "gemini" in self.provider.lower():
-            tokenizer = GeminiTokenizer(model=model, max_tokens=self.max_tokens)
+            tokenizer = GeminiTokenizer(model=base_model, max_tokens=self.max_tokens)
         elif "mistral" in self.provider.lower():
-            tokenizer = MistralTokenizer(model=model, max_tokens=self.max_tokens)
+            tokenizer = MistralTokenizer(model=base_model, max_tokens=self.max_tokens)
         else:
-            tokenizer = HuggingFaceTokenizer(model=self.model, max_tokens=self.max_tokens)
+            tokenizer = HuggingFaceTokenizer(model=base_model, max_tokens=self.max_tokens)
 
-        logger.debug(f"Tokenizer loaded for model: {self.model}")
+        logger.debug(f"Tokenizer loaded for base model: {base_model}")
         return tokenizer

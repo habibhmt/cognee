@@ -25,17 +25,21 @@ class GenericAPIAdapter(LLMInterface):
 
     name: str
     model: str
-    api_key: str
 
     def __init__(self, endpoint, api_key: str, model: str, name: str, max_tokens: int):
         self.name = name
         self.model = model
-        self.api_key = api_key
         self.endpoint = endpoint
         self.max_tokens = max_tokens
 
+        # Conditionally pass api_key to litellm.acompletion
+        # If api_key is None, litellm will look for it in environment variables
+        litellm_params = {"mode": instructor.Mode.JSON}
+        if api_key is not None:
+            litellm_params["api_key"] = api_key
+
         self.aclient = instructor.from_litellm(
-            litellm.acompletion, mode=instructor.Mode.JSON, api_key=api_key
+            litellm.acompletion, **litellm_params
         )
 
     @sleep_and_retry_async()
@@ -81,4 +85,7 @@ class GenericAPIAdapter(LLMInterface):
             max_retries=5,
             api_base=self.endpoint,
             response_model=response_model,
+            # LiteLLM should infer the provider from the model name (e.g., "openrouter/...")
+            # and environment variables (OPENROUTER_API_KEY, OPENROUTER_API_BASE).
+            # No explicit 'provider' or 'litellm_provider' argument is needed here.
         )

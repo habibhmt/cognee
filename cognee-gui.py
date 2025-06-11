@@ -1,5 +1,7 @@
 import sys
 import asyncio
+import os
+from dotenv import load_dotenv, set_key
 
 try:
     import cognee
@@ -15,6 +17,9 @@ try:
         QMessageBox,
         QTextEdit,
         QProgressDialog,
+        QDialog,
+        QFormLayout,
+        QDialogButtonBox,
     )
     from PySide6.QtCore import Qt
 
@@ -32,14 +37,80 @@ except ImportError as e:
     raise e
 
 
+class SettingsDialog(QDialog):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("LLM Settings")
+        self.setMinimumWidth(400)
+
+        self.layout = QFormLayout(self)
+
+        self.llm_provider_input = QLineEdit(self)
+        self.llm_model_input = QLineEdit(self)
+        self.llm_endpoint_input = QLineEdit(self)
+        self.llm_api_key_input = QLineEdit(self)
+        self.llm_api_key_input.setEchoMode(QLineEdit.Password) # Hide API key
+
+        self.layout.addRow("LLM Provider:", self.llm_provider_input)
+        self.layout.addRow("LLM Model:", self.llm_model_input)
+        self.layout.addRow("LLM Endpoint:", self.llm_endpoint_input)
+        self.layout.addRow("LLM API Key:", self.llm_api_key_input)
+
+        self.load_settings()
+
+        self.buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel, self)
+        self.buttons.accepted.connect(self.save_settings)
+        self.buttons.rejected.connect(self.reject)
+        self.layout.addRow(self.buttons)
+
+    def load_settings(self):
+        load_dotenv() # Load .env file
+        self.llm_provider_input.setText(os.getenv("LLM_PROVIDER", "custom"))
+        self.llm_model_input.setText(os.getenv("LLM_MODEL", "openrouter/mistralai/mistral-7b-instruct:free")) # OpenRouter model format
+        self.llm_endpoint_input.setText(os.getenv("LLM_ENDPOINT", "https://openrouter.ai/api/v1/chat/completions"))
+        self.llm_api_key_input.setText(os.getenv("LLM_API_KEY", "")) # Still use LLM_API_KEY for cognee's internal config
+
+    def save_settings(self):
+        try:
+            # Ensure .env file exists or create it
+            env_path = os.path.join(os.getcwd(), ".env")
+            if not os.path.exists(env_path):
+                open(env_path, 'a').close() # Create empty .env file if it doesn't exist
+
+            set_key(env_path, "LLM_PROVIDER", self.llm_provider_input.text())
+            set_key(env_path, "LLM_MODEL", self.llm_model_input.text())
+            set_key(env_path, "LLM_ENDPOINT", self.llm_endpoint_input.text())
+            # For OpenRouter, litellm expects OPENROUTER_API_KEY and OPENROUTER_API_BASE
+            set_key(env_path, "OPENROUTER_API_KEY", self.llm_api_key_input.text())
+            set_key(env_path, "OPENROUTER_API_BASE", self.llm_endpoint_input.text())
+            # Also keep LLM_API_KEY for cognee's internal config if it uses it directly
+            set_key(env_path, "LLM_API_KEY", self.llm_api_key_input.text())
+            QMessageBox.information(self, "Settings Saved", "LLM settings have been saved successfully.")
+            self.accept()
+        except Exception as e:
+            QMessageBox.critical(self, "Error", f"Failed to save settings: {str(e)}")
+
 class FileSearchApp(QWidget):
     def __init__(self):
         super().__init__()
         self.selected_file = None
+        self.load_llm_settings() # Load settings on app start
         self.init_ui()
 
+    def load_llm_settings(self):
+        load_dotenv() # Load .env file
+        # These will be used by cognee internally if set as environment variables
+        os.environ["LLM_PROVIDER"] = os.getenv("LLM_PROVIDER", "custom")
+        os.environ["LLM_MODEL"] = os.getenv("LLM_MODEL", "openrouter/mistralai/mistral-7b-instruct:free") # OpenRouter model format
+        os.environ["LLM_ENDPOINT"] = os.getenv("LLM_ENDPOINT", "https://openrouter.ai/api/v1/chat/completions")
+        os.environ["LLM_API_KEY"] = os.getenv("LLM_API_KEY", "")
+
+        # Set OpenRouter specific environment variables for LiteLLM
+        os.environ["OPENROUTER_API_KEY"] = os.getenv("LLM_API_KEY", "")
+        os.environ["OPENROUTER_API_BASE"] = os.getenv("LLM_ENDPOINT", "https://openrouter.ai/api/v1")
+
     def init_ui(self):
-        # Horizontal layout for file upload and visualization buttons
+        # Horizontal layout for file upload, visualization, and settings buttons
         button_layout = QHBoxLayout()
 
         # Button to open file dialog
@@ -51,6 +122,11 @@ class FileSearchApp(QWidget):
         self.visualize_button = QPushButton("Visualize Data", parent=self)
         self.visualize_button.clicked.connect(lambda: asyncio.ensure_future(self.visualize_data()))
         button_layout.addWidget(self.visualize_button)
+
+        # Button to open settings dialog
+        self.settings_button = QPushButton("Settings", parent=self)
+        self.settings_button.clicked.connect(self.open_settings_dialog)
+        button_layout.addWidget(self.settings_button)
 
         # Label to display selected file path
         self.file_label = QLabel("No file selected", parent=self)
@@ -85,6 +161,11 @@ class FileSearchApp(QWidget):
         self.setLayout(layout)
         self.setWindowTitle("Cognee")
         self.resize(500, 300)
+
+    def open_settings_dialog(self):
+        dialog = SettingsDialog(self)
+        if dialog.exec() == QDialog.Accepted:
+            self.load_llm_settings() # Reload settings after dialog is closed
 
     def open_file_dialog(self):
         file_path, _ = QFileDialog.getOpenFileName(

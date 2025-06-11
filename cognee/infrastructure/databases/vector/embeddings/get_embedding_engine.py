@@ -95,6 +95,33 @@ def create_embedding_engine(
 
     from .LiteLLMEmbeddingEngine import LiteLLMEmbeddingEngine
 
+    if embedding_provider == "custom":
+        return LiteLLMEmbeddingEngine(
+            provider=embedding_provider,
+            api_key=embedding_api_key or llm_api_key,
+            endpoint=embedding_endpoint,
+            api_version=embedding_api_version,
+            model=f"openrouter/{embedding_model}",
+            dimensions=embedding_dimensions,
+            max_tokens=embedding_max_tokens,
+        )
+
+    if embedding_provider == "huggingface":
+        # Ensure model name has huggingface/ prefix for litellm
+        model_name = embedding_model
+        if not model_name.startswith("huggingface/"):
+            model_name = f"huggingface/{model_name}"
+
+        return LiteLLMEmbeddingEngine(
+            provider=embedding_provider,
+            api_key=embedding_api_key or llm_api_key,
+            endpoint=embedding_endpoint,
+            api_version=embedding_api_version,
+            model=model_name,
+            dimensions=embedding_dimensions,
+            max_tokens=embedding_max_tokens,
+        )
+
     return LiteLLMEmbeddingEngine(
         provider=embedding_provider,
         api_key=embedding_api_key or llm_api_key,

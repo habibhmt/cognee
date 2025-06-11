@@ -91,14 +91,22 @@ def get_llm_client():
         return AnthropicAdapter(max_tokens=max_tokens, model=llm_config.llm_model)
 
     elif provider == LLMProvider.CUSTOM:
-        if llm_config.llm_api_key is None:
-            raise InvalidValueError(message="LLM API key is not set.")
+        # For custom providers like OpenRouter, litellm expects API key and base to be
+        # set as specific environment variables (e.g., OPENROUTER_API_KEY, OPENROUTER_API_BASE).
+        # We pass None for api_key here to force litellm to use environment variables.
+        # The check for API key existence will be handled by litellm or the specific provider.
+
+        # Ensure the model string has the correct provider prefix so LiteLLM can
+        # automatically detect the provider. If the caller forgot to prefix the
+        # model with "openrouter/", add it here transparently.
+        if not llm_config.llm_model.lower().startswith("openrouter/"):
+            llm_config.llm_model = f"openrouter/{llm_config.llm_model.lstrip('/') }"
 
         from .generic_llm_api.adapter import GenericAPIAdapter
 
         return GenericAPIAdapter(
             llm_config.llm_endpoint,
-            llm_config.llm_api_key,
+            None, # Pass None for api_key to rely on OPENROUTER_API_KEY env var
             llm_config.llm_model,
             "Custom",
             max_tokens=max_tokens,
