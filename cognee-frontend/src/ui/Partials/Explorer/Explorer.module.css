@@ -19,3 +19,7 @@
   width: 35%;
   display: flex;
 }
+
+.fullWidthChat {
+  width: 100%;
+}

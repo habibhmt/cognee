@@ -1,6 +1,6 @@
 import classNames from 'classnames';
 import { useCallback, useEffect, useState } from 'react';
-import { Spacer, Stack, Text } from 'ohmy-ui';
+import { Button, Spacer, Stack, Text } from 'ohmy-ui';
 import { LoadingIndicator } from '@/ui/App';
 import { IFrameView, SearchView } from '@/ui/Partials';
 import { getExplorationGraphUrl } from '@/modules/exploration';
@@ -15,6 +15,7 @@ interface ExplorerProps {
 export default function Explorer({ dataset, className, style }: ExplorerProps) {
   const [error, setError] = useState<Error | null>(null);
   const [graphHtml, setGraphHtml] = useState<string | null>(null);
+  const [showIFrame, setShowIFrame] = useState(true);
 
   const exploreData = useCallback(() => {
     getExplorationGraphUrl(dataset)
@@ -35,27 +36,39 @@ export default function Explorer({ dataset, className, style }: ExplorerProps) {
     <Stack
       gap="6"
       style={style}
-      orientation="horizontal"
+      orientation="vertical" // Changed to vertical to stack button on top
       className={classNames(styles.explorerContent, className)}
     >
-      <div className={styles.graphExplorer}>
-        {error ? (
-          <Text color="red">{error.message}</Text>
-        ) : (
-          <>
-            {!graphHtml ? (
-              <Spacer horizontal="2" wrap>
-                <LoadingIndicator />
-              </Spacer>
+      <Button onClick={() => setShowIFrame(!showIFrame)} variant="outline">
+        {showIFrame ? 'Hide Graph' : 'Show Graph'}
+      </Button>
+      <Stack
+        gap="6"
+        orientation="horizontal"
+        className={styles.mainContent} // Added a class for the content area
+        style={{ width: '100%' }}
+      >
+        {showIFrame && (
+          <div className={styles.graphExplorer}>
+            {error ? (
+              <Text color="red">{error.message}</Text>
             ) : (
-              <IFrameView src="http://127.0.0.1:8000/api/v1/visualize" />
+              <>
+                {!graphHtml ? (
+                  <Spacer horizontal="2" wrap>
+                    <LoadingIndicator />
+                  </Spacer>
+                ) : (
+                  <IFrameView src="http://127.0.0.1:8000/api/v1/visualize" />
+                )}
+              </>
             )}
-          </>
+          </div>
         )}
-      </div>
-      <div className={styles.chat}>
-        <SearchView />
-      </div>
+        <div className={classNames(styles.chat, !showIFrame && styles.fullWidthChat)}>
+          <SearchView />
+        </div>
+      </Stack>
     </Stack>
   )
 }
